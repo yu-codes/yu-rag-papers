@@ -1,0 +1,5 @@
+arxiv               # 官方 Python SDK
+pdfminer.six        # PDF ➜ 文字
+sentence-transformers  # 預設用 all-MiniLM-L6-v2
+faiss-cpu           # 若用 GPU 請改 faiss-gpu
+tqdm
