@@ -1,0 +1,23 @@
+name: CD
+
+# 只在 main 分支成功推送、或手動執行時部署
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write          # 若用 OIDC 部署到雲端
+  # 其他如 packages: write…
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy to AWS
+        env:
+          AWS_REGION: ap-northeast-1
+        run: |
+          # 你的部署腳本，例如 CDK、Serverless Framework、ssh 等
