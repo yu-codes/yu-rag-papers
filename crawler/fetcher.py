@@ -45,6 +45,15 @@ def crawl(query: str, max_results: int = 10) -> dict[str, list[str]]:
         (TXT_DIR / f"{pid}.txt").write_text("\n\n".join(paras), encoding="utf-8")
     return corpus
 
-
 if __name__ == "__main__":
-    crawl("cat:cs.CL AND transformers", max_results=5)
+    import argparse, logging
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("query", nargs="?", default="cat:cs.CL AND transformers")
+    parser.add_argument("--max", type=int, default=5)
+    parser.add_argument("--overwrite", action="store_true")
+    args = parser.parse_args()
+
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(message)s")
+    logging.info(f"Query={args.query}  max={args.max}")
+    crawl(args.query, args.max)
