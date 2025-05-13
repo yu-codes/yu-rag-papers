@@ -1,6 +1,6 @@
 name: RAG CI (CPU, no‑key)
 
-on: [push, pull_request]
+on: [push]
 
 jobs:
   ingest:
@@ -26,7 +26,8 @@ jobs:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
           restore-keys: ${{ runner.os }}-pip-
-
+            
+      - run: pip install --upgrade pip    # pip 自己先升
       - run: pip install -r requirements.txt
 
       # -------- GGUF model cache --------
@@ -64,3 +65,17 @@ jobs:
           ans = chain({"question": "What is FAISS?"})["answer"]
           print("Partial answer:", ans[:200], "...")
           PY
+
+      # -------- API check --------
+      - name: FastAPI health check
+        run: |
+          uvicorn app.main:app --port 8000 --host 127.0.0.1 &
+          PID=$!
+          trap "kill $PID" EXIT
+          for i in {1..10}; do
+            if curl -sSf http://127.0.0.1:8000/docs > /dev/null; then
+              echo "API UP"; exit 0
+            fi
+            sleep 2
+          done
+          echo "API failed to start" && exit 1
