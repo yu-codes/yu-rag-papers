@@ -1,85 +1,66 @@
 """
 rag/embeddings.py
 =================
-將段落文字轉成向量並寫入 FAISS，並提供簡易查詢功能。
+將段落文字轉成向量並寫入 **LangChain 相容** 的 FAISS VectorStore，並提供簡易查詢功能。
 """
 
 from pathlib import Path
-import pickle
 import logging
+from typing import List, Dict
 
-import faiss
-import numpy as np
-from sentence_transformers import SentenceTransformer
-from tqdm import tqdm
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_community.vectorstores import FAISS as LC_FAISS
+from langchain.schema import Document
+from sentence_transformers import SentenceTransformer  # 只用於 CLI demo 查詢
 
 # ---------- 目錄設定 ----------
 FAISS_DIR = Path("data/faiss")
 FAISS_DIR.mkdir(parents=True, exist_ok=True)
-
-INDEX_PATH = FAISS_DIR / "index.faiss"
-META_PATH = FAISS_DIR / "metadata.pkl"
 
 # 預設嵌入模型（可替換）
 MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 
 
 # ---------- 主要流程 ----------
-def build_embeddings(corpus: dict[str, list[str]]) -> None:
-    """
-    將 {paper_id: [段落, ...]} 轉成向量並存磁碟。
-
-    會輸出：
-      • data/faiss/index.faiss   —— 向量索引
-      • data/faiss/metadata.pkl —— [(paper_id, paragraph_idx, paragraph_text), ...]
-    """
+def build_embeddings(corpus: Dict[str, List[str]]) -> None:
+    """將 `{paper_id: [paragraph, …]}` 轉成向量並以 LangChain 格式存磁碟。"""
     if not corpus:
         raise ValueError("傳入的 corpus 為空！")
 
-    model = SentenceTransformer(MODEL_NAME)
-    vectors: list[np.ndarray] = []
-    metadata: list[tuple[str, int, str]] = []
+    embedder = HuggingFaceEmbeddings(model_name=MODEL_NAME)
+    docs: List[Document] = []
 
-    logging.info("Encoding paragraphs …")
+    logging.info("Packaging paragraphs as Documents …")
     for pid, paras in corpus.items():
         for idx, text in enumerate(paras):
-            vec = model.encode(text, normalize_embeddings=True)
-            vectors.append(vec)
-            metadata.append((pid, idx, text))
+            docs.append(
+                Document(
+                    page_content=text,
+                    metadata={"paper_id": pid, "paragraph": idx},
+                )
+            )
 
-    vectors_np = np.vstack(vectors).astype("float32")
-    dim = vectors_np.shape[1]
-
-    logging.info("Building FAISS index …")
-    index = faiss.IndexFlatIP(dim)  # 內積相似度；快速、免訓練
-    index.add(vectors_np)
-
-    faiss.write_index(index, str(INDEX_PATH))
-    META_PATH.write_bytes(pickle.dumps(metadata))
-    logging.info(f"✅ 向量數量：{len(metadata)}  已寫入 {INDEX_PATH}")
+    logging.info("Building LangChain FAISS VectorStore …")
+    store = LC_FAISS.from_documents(docs, embedder)
+    store.save_local(str(FAISS_DIR))
+    logging.info(f"✅ 向量數量：{len(docs)}  已寫入 {FAISS_DIR / 'index.faiss'}")
 
 
 def query(text: str, top_k: int = 5):
-    """
-    用句子 `text` 查詢最相似的段落，回傳
-      [(score, paper_id, paragraph_idx, paragraph_text), ...]
-    """
-    if not INDEX_PATH.exists() or not META_PATH.exists():
-        raise FileNotFoundError("找不到向量索引；請先執行 build_embeddings()")
+    """用句子 `text` 查詢最相似段落，回傳 [(score, metadata, paragraph_text), …]"""
+    embedder = HuggingFaceEmbeddings(model_name=MODEL_NAME)
+    store = LC_FAISS.load_local(
+        str(FAISS_DIR),
+        embedder,
+        allow_dangerous_deserialization=True,  # 我們自己生成的檔案可信
+    )
 
-    model = SentenceTransformer(MODEL_NAME)
-    index = faiss.read_index(str(INDEX_PATH))
-    metadata = pickle.loads(META_PATH.read_bytes())
-
-    qvec = model.encode(text, normalize_embeddings=True).astype("float32")
-    scores, ids = index.search(qvec.reshape(1, -1), top_k)
-
-    results = [
-        (float(scores[0][i]), *metadata[ids[0][i]])
-        for i in range(top_k)
-        if ids[0][i] != -1
-    ]
-    return results
+    results = store.similarity_search_with_score(text, k=top_k)
+    out = []
+    for doc, dist in results:  # dist 是 L2 距離；轉成簡易相似度
+        sim = 1 / (1 + dist)
+        out.append((sim, doc.metadata, doc.page_content))
+    return out
 
 
 # ---------- CLI ----------
@@ -88,7 +69,7 @@ def _cli():
     from crawler.fetcher import crawl
 
     parser = argparse.ArgumentParser(
-        description="將 arXiv 文章嵌入並寫入 FAISS，並可立即測試查詢"
+        description="將 arXiv 文章嵌入並寫入 FAISS，並可立即測試檢索"
     )
     parser.add_argument(
         "--query", default="cat:cs.CL AND transformers", help="arXiv API 查詢字串"
@@ -109,10 +90,10 @@ def _cli():
     # 2) 產生向量索引
     build_embeddings(corpus)
 
-    # 3) 簡單查詢示範
+    # 3) 查詢示範
     print("\n---- Query demo ----")
-    for score, pid, idx, txt in query(args.test, 3):
-        print(f"[{score:.3f}] {pid}#{idx}: {txt[:80]}…")
+    for score, meta, txt in query(args.test, 3):
+        print(f"[{score:.3f}] {meta['paper_id']}#{meta['paragraph']}: {txt[:80]}…")
 
 
 if __name__ == "__main__":
