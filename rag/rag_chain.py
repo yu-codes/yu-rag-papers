@@ -2,77 +2,83 @@
 rag/rag_chain.py
 ================
 把 FAISS 向量資料庫接成 LangChain Conversational RAG，
-並加上一段最小互動 CLI，方便直接測試。
+並保留一個簡易 CLI 方便在本機測試。
 
-先確定已經執行過：
+先執行：
     python -m rag.embeddings --max 3
-產生  data/faiss/index.faiss  與 metadata.pkl
+以產生 data/faiss/index.faiss 與 metadata.pkl
 """
-from pathlib import Path
+
+from __future__ import annotations
+
 import os
+from pathlib import Path
+from typing import Optional
+
 import typer
-
-# from ctransformers.langchain import ChatCTransformers  # 新增
-
+from langchain.chains import ConversationalRetrievalChain
+from langchain.memory import ConversationBufferMemory
+from langchain_community.chat_models import ChatLlamaCpp
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
-from langchain.memory import ConversationBufferMemory
-from langchain.chains import ConversationalRetrievalChain
-from langchain_openai import ChatOpenAI  # ↖ 新路徑
-
-from langchain_community.chat_models import ChatLlamaCpp  # ← 新
 
 # ---------- 常數 ----------
 INDEX_DIR = Path("data/faiss")
 MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 K = 3
 
-MODEL_PATH = "models/tinyllama-q4_K_M.gguf"  # 存放於 repo 或 CI 下載
+MODEL_PATH = "models/tinyllama-q4_K_M.gguf"  # TinyLLaMA-GGUF 路徑
+
 
 # ---------- 工具函式 ----------
 def build_retriever():
+    if not (INDEX_DIR / "index.faiss").exists():
+        raise RuntimeError(f"❌ 向量庫不存在：{INDEX_DIR}")
     embedder = HuggingFaceEmbeddings(model_name=MODEL_NAME)
     vs = FAISS.load_local(
         str(INDEX_DIR),
         embedder,
-    allow_dangerous_deserialization=True,   # ← 新增
-)
+        allow_dangerous_deserialization=True,  # 為了在 CI 載入 pickle
+    )
     return vs.as_retriever(search_kwargs={"k": K})
 
 
-"""def build_chain():
+def build_chain(
+    memory: Optional[ConversationBufferMemory] = None,
+):
+    """
+    建立 ConversationalRetrievalChain.
 
-    llm = ChatOpenAI(
-        model="gpt-3.5-turbo", temperature=0, api_key=os.getenv("OPENAI_API_KEY")
-    )
-    return ConversationalRetrievalChain.from_llm(
-        llm=llm,
-        retriever=build_retriever(),
-        memory=ConversationBufferMemory(
-            memory_key="chat_history", return_messages=True
-        ),
-        return_source_documents=True,
-    )"""
-
-
-def build_chain():
+    Parameters
+    ----------
+    memory : ConversationBufferMemory | None, default None
+        若傳入自訂記憶體（例如含資料庫歷史），
+        直接掛載；否則使用預設的 In-RAM Buffer。
+    """
     llm = ChatLlamaCpp(
         model_path=MODEL_PATH,
         temperature=0.1,
         max_tokens=512,
-        n_ctx=4096,  # 視模型支援調整
-        n_threads=4,  # GitHub runner = 2 vCPU，可設 2
+        n_ctx=4096,
+        n_threads=4,  # GitHub runner 有 2 vCPU，可視情況調整
         verbose=False,
     )
+
     retriever = build_retriever()
-    memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
-    return ConversationalRetrievalChain.from_llm(
+    if memory is None:
+        memory = ConversationBufferMemory(
+            memory_key="chat_history",
+            return_messages=True,
+        )
+
+    chain = ConversationalRetrievalChain.from_llm(
         llm=llm,
         retriever=retriever,
         memory=memory,
         return_source_documents=False,
     )
-    
+    return chain
+
 
 # ---------- Typer CLI ----------
 cli = typer.Typer()
@@ -82,7 +88,7 @@ cli = typer.Typer()
 def chat():
     """進入互動式 RAG 對話；輸入 exit 離開。"""
     chain = build_chain()
-    print("🤖 RAG Chat 啟動，輸入 'exit' 離開")
+    print("🤖  RAG Chat 啟動，輸入 'exit' 離開")
     while True:
         q = input("你： ").strip()
         if q.lower() in {"exit", "quit"}:

@@ -1,0 +1,19 @@
+{
+    "events": [
+        {
+            "type": "message",
+            "replyToken": "00000000000000000000000000000000",
+            "source": {
+                "userId": "Uxxxxxxxxx",
+                "type": "user"
+            },
+            "timestamp": 0,
+            "mode": "active",
+            "message": {
+                "id": "1",
+                "type": "text",
+                "text": "Hello"
+            }
+        }
+    ]
+}

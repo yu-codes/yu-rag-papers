@@ -17,11 +17,38 @@ from sentence_transformers import SentenceTransformer  # 只用於 CLI demo 查�
 FAISS_DIR = Path("data/faiss")
 FAISS_DIR.mkdir(parents=True, exist_ok=True)
 
+# ---------- 參數設定 ----------
 # 預設嵌入模型（可替換）
 MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 
 
 # ---------- 主要流程 ----------
+"""
+def build_embeddings(corpus: Dict[str, List[str]]) -> None:
+    "將 `{paper_id: [paragraph, …]}` 轉成向量並以 LangChain 格式存磁碟。"
+    if not corpus:
+        raise ValueError("傳入的 corpus 為空！")
+
+    embedder = HuggingFaceEmbeddings(model_name=MODEL_NAME)
+    docs: List[Document] = []
+
+    logging.info("Packaging paragraphs as Documents …")
+    for pid, paras in corpus.items():
+        for idx, text in enumerate(paras):
+            docs.append(
+                Document(
+                    page_content=text,
+                    metadata={"paper_id": pid, "paragraph": idx},
+                )
+            )
+
+    logging.info("Building LangChain FAISS VectorStore …")
+    store = LC_FAISS.from_documents(docs, embedder)
+    store.save_local(str(FAISS_DIR))
+    logging.info(f"✅ 向量數量：{len(docs)}  已寫入 {FAISS_DIR / 'index.faiss'}")
+    """
+
+
 def build_embeddings(corpus: Dict[str, List[str]]) -> None:
     """將 `{paper_id: [paragraph, …]}` 轉成向量並以 LangChain 格式存磁碟。"""
     if not corpus:
@@ -43,7 +70,11 @@ def build_embeddings(corpus: Dict[str, List[str]]) -> None:
     logging.info("Building LangChain FAISS VectorStore …")
     store = LC_FAISS.from_documents(docs, embedder)
     store.save_local(str(FAISS_DIR))
-    logging.info(f"✅ 向量數量：{len(docs)}  已寫入 {FAISS_DIR / 'index.faiss'}")
+
+    # 同時確認 index.faiss 與 index.pkl 均已產生
+    idx_path = FAISS_DIR / "index.faiss"
+    pkl_path = FAISS_DIR / "index.pkl"
+    logging.info(f"✅ 向量數量：{len(docs)}  已寫入 {idx_path} 及 {pkl_path}")
 
 
 def query(text: str, top_k: int = 5):
