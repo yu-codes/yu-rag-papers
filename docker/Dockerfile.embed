@@ -1,15 +1,30 @@
 ############################################################
-#  Embed 批次向量化
+#  Embed ── 批次抓論文 → 文字切分 → 建立向量庫
 ############################################################
-FROM python:3.11-slim
-WORKDIR /app
+FROM python:3.10-slim
 
-# requirements：先 core 再 embed
-COPY requirements.core.txt requirements.embed.txt ./
-RUN pip install --no-cache-dir -r requirements.embed.txt
+# -------- 環境變數 --------
+WORKDIR /code
 
-# 複製程式碼（用到 rag.embeddings）
+ENV PYTHONUNBUFFERED=1 \
+    PATH=/root/.local/bin:$PATH
+
+# --- 加入編譯工具 ---
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends build-essential cmake git && \
+    rm -rf /var/lib/apt/lists/*
+
+
+
+# -------- 安裝依賴 --------
+# ❶ 先裝共用 core 依賴，再裝 embed 專屬依賴
+COPY requirements/requirements.core.txt requirements/requirements.embed.txt ./
+RUN pip install --user --no-cache-dir -r requirements.core.txt \
+ && pip install --user --no-cache-dir -r requirements.embed.txt
+
+# -------- 複製專案程式碼 --------
 COPY . .
 
-# 預設執行：抓 PDF → 解析 → 建立向量庫
+# -------- 預設啟動指令 --------
+# 會自動下載 PDF、解析、並寫入 data/faiss
 CMD ["python", "-m", "rag.embeddings"]

@@ -1,0 +1,22 @@
+-r requirements.core.txt
+
+# ─── 文字切段 & 嵌入 & 向量庫 ─────────────────────────
+sentence-transformers==4.1.0
+faiss-cpu==1.11.0
+langchain==0.3.25
+langchain-community==0.3.24
+langchain-core==0.3.59
+langchain-huggingface==0.2.0
+langchain-text-splitters==0.3.8
+
+# PDF 下載 / 解析
+arxiv==2.2.0
+feedparser==6.0.11
+pdfminer.six==20250506
+
+# 科學計算
+numpy==2.2.5
+scipy==1.15.3
+scikit-learn==1.6.1
+joblib==1.5.0
+threadpoolctl==3.6.0
