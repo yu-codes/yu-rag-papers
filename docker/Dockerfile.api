@@ -1,0 +1,33 @@
+############################################################
+#  Stage 1 ─── builder  (安裝相依套件到 /root/.local)
+############################################################
+FROM python:3.11-slim AS builder
+WORKDIR /code
+
+# 複製兩份 requirements；順序不可反
+COPY requirements.core.txt requirements.api.txt ./
+
+# 建議加 --no-cache-dir 以縮小映像
+RUN pip install --user --no-cache-dir -r requirements.api.txt
+
+############################################################
+#  Stage 2 ─── runtime image
+############################################################
+FROM python:3.11-slim
+ENV PYTHONUNBUFFERED=1
+WORKDIR /code
+
+# 1) 複製套件 + 專案原始碼
+COPY --from=builder /root/.local /root/.local
+COPY . .
+
+# 2) 把 pip user 路徑加到 PATH
+ENV PATH=/root/.local/bin:$PATH
+
+# 3) 預先下載 TinyLlama GGUF（~1 GB，可改成 CI 產生的 build cache）
+RUN mkdir -p /code/models \
+ && curl -L -o /code/models/tinyllama-q4_K_M.gguf \
+    https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf
+
+EXPOSE 8000
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

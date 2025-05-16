@@ -22,6 +22,7 @@ from langchain_community.chat_models import ChatLlamaCpp
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 
+from peft import PeftModel
 # ---------- 常數 ----------
 INDEX_DIR = Path("data/faiss")
 MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
@@ -63,6 +64,10 @@ def build_chain(
         n_threads=4,  # GitHub runner 有 2 vCPU，可視情況調整
         verbose=False,
     )
+    adapter_dir = Path("rag/lora_adapter")
+    if adapter_dir.exists():
+        llm.client = PeftModel.from_pretrained(llm.client, adapter_dir.as_posix())
+
 
     retriever = build_retriever()
     if memory is None:

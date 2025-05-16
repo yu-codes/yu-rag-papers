@@ -1,0 +1,15 @@
+############################################################
+#  Embed 批次向量化
+############################################################
+FROM python:3.11-slim
+WORKDIR /app
+
+# requirements：先 core 再 embed
+COPY requirements.core.txt requirements.embed.txt ./
+RUN pip install --no-cache-dir -r requirements.embed.txt
+
+# 複製程式碼（用到 rag.embeddings）
+COPY . .
+
+# 預設執行：抓 PDF → 解析 → 建立向量庫
+CMD ["python", "-m", "rag.embeddings"]

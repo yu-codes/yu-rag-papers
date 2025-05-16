@@ -1,0 +1,5 @@
+-r requirements.core.txt
+
+arxiv==2.2.0
+feedparser==6.0.11
+pdfminer.six==20250506

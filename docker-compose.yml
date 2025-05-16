@@ -1,13 +1,52 @@
 services:
+  # 1️⃣ PostgreSQL ------------------------------------------------
   db:
     image: postgres:16
+    restart: unless-stopped
     environment:
-      POSTGRES_USER: rag_user
-      POSTGRES_PASSWORD: rag_pass
-      POSTGRES_DB: rag_db
+      POSTGRES_USER: ${POSTGRES_USER:-rag_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rag_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-rag_db}
     ports:
       - "5432:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-rag_user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # 2️⃣ Embedding 一次性 Job --------------------------------------
+  embed:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.embed
+    profiles: ["embed"]          # -> 只在需要時執行：docker compose --profile embed up embed
+    volumes:
+      - ./data:/code/data        # 產生的向量庫寫進 host 端
+      - ./models:/code/models    # 共用 GGUF / sentence-transformers 快取
+    environment:
+      - HF_HOME=/code/models
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # 3️⃣ FastAPI + LINE Bot ----------------------------------------
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/code/data        # 讀取向量庫
+      - ./models:/code/models    # 讀取 GGUF
+    env_file: .env               # LINE_CHANNEL_SECRET / ACCESS_TOKEN / DATABASE_URL 等
+    restart: unless-stopped
+
 volumes:
   db_data:
