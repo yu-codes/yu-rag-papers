@@ -1,40 +1,57 @@
 ############################################################
 #  Stage 1 ── builder  (安裝相依套件到 /root/.local)
 ############################################################
-FROM python:3.11-slim AS builder
+FROM python:3.10-slim AS builder
 WORKDIR /code
+
+# --- 加入編譯工具 ---
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends build-essential cmake git && \
+    rm -rf /var/lib/apt/lists/*
 
 # ❶ 先複製兩支 requirements
 COPY requirements/requirements.core.txt requirements/requirements.api.txt ./
 
 # ❷ 先裝共用依賴，再裝 API 專屬依賴
 #    --no-cache-dir 可省下 pip cache，縮小映像
-RUN pip install --user --no-cache-dir -r requirements.core.txt \
- && pip install --user --no-cache-dir -r requirements.api.txt
+RUN pip install --upgrade pip \
+ && pip install --user --no-cache-dir \
+      # --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu \
+      # llama_cpp_python>=0.3 \
+      -r requirements.core.txt \
+      -r requirements.api.txt
+
+
+# RUN pip install --user --no-cache-dir -r requirements.core.txt \
+#  && pip install --user --no-cache-dir -r requirements.api.txt
 
 ############################################################
-#  Stage 2 ── runtime  (實際執行容器)
+#  Stage 2 ─ runtime
 ############################################################
-FROM python:3.11-slim
-
-# 不要把 log buffer 在記憶體；把 pip user bin 加進 PATH
+FROM python:3.10-slim AS runtime
 ENV PYTHONUNBUFFERED=1 \
     PATH=/root/.local/bin:$PATH
 
 WORKDIR /code
 
-# ❸ 複製已安裝好的 site-packages & CLI
-COPY --from=builder /root/.local /root/.local
+# ---- 系統工具（ngrok / jq / build essentials，後面可能要編譯） ----
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        curl gnupg jq build-essential cmake git && \
+    curl -sSL https://ngrok-agent.s3.amazonaws.com/ngrok.asc | \
+        tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null && \
+    echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | \
+        tee /etc/apt/sources.list.d/ngrok.list && \
+    apt-get update && apt-get install -y ngrok && \
+    rm -rf /var/lib/apt/lists/*
 
-# ❹ 複製專案原始碼
+# ---- Python site-packages & 專案程式碼 ----
+COPY --from=builder /root/.local /root/.local
 COPY . .
 
-# ❺ 預先把 TinyLlama GGUF (~1 GiB) 放進映像
-#    如果你在 CI/CD 已做 cache，可移除此段改為快取層
-RUN mkdir -p /code/models \
- && curl -L -o /code/models/tinyllama-q4_K_M.gguf \
-      https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf
+# ---- models /start.sh ----
+COPY bin/start_api.sh /start.sh
+RUN chmod +x /start.sh
 
 EXPOSE 8000
-
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+ENTRYPOINT ["/start.sh"]

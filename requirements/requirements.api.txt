@@ -5,10 +5,13 @@ fastapi==0.115.12
 starlette==0.46.2
 uvicorn==0.34.2
 line-bot-sdk==3.17.1
+typer==0.15.3
 
 # ─── RAG 推理 (本地 LLM + 向量檢索) ────────────────
 ctransformers==0.2.27           # gguf 推理封裝
-llama_cpp_python==0.3.9         # 編譯期需要 git / cmake
+
+# llama_cpp_python==0.3.9 
+llama_cpp_python==0.2.70        # 編譯期需要 git / cmake
 torch==2.7.0                    # peft / trl 依賴
 transformers==4.51.3
 sentence-transformers==4.1.0    # 查詢向量化
