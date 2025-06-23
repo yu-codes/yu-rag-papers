@@ -1,6 +1,6 @@
 # 📚 yu-rag-papers
 
-A **Retrieval‑Augmented Generation (RAG)** playground that wires up FastAPI, PostgreSQL + pgvector, an embedding worker, and a LINE Bot into a single reproducible environment.
+A **Retrieval‑Augmented Generation (RAG)** playground that wires up FastAPI, PostgreSQL, FAISS vector storage, an embedding worker, and a LINE Bot into a single reproducible environment.
 
 *Built for quick experiments, demos, and personal projects.*
 
@@ -11,7 +11,7 @@ A **Retrieval‑Augmented Generation (RAG)** playground that wires up FastAPI, P
 | Layer        | Tech (主要套件 / 映像)                                          | Purpose / Role                                                          |
 | -------------| -------------------------------------------------------------- | ----------------------------------------------------------------------- |
 | **API**      | FastAPI + Uvicorn <br>LangChain (RAG Orchestration)           | REST / Webhook endpoints, stitches **Retriever → LLM** into chat flow   |
-| **Vector DB**| PostgreSQL 16 + pgvector <br>FAISS (index-flat/IP)             | Persists document chunks & dense vectors for semantic search            |
+| **Vector DB**| FAISS (index-flat/IP)                                         | Stores document chunks & dense vectors for semantic search              |
 | **Embedding**| Worker container (`docker/Dockerfile.embed`) <br>Hugging Face Transformers + LangChain Embeddings | Offline job：chunk files → generate embeddings → write to Vector DB     |
 | **LLM**      | TinyLlama-1.1B-Chat (GGUF) <br>llama-cpp-python / ctransformers | Local inference for answer generation (keeps data on-prem)             |
 | **Bot**      | LINE Messaging API (SDK)                                       | Chat interface for end users; forwards queries to API                   |
@@ -25,6 +25,7 @@ A **Retrieval‑Augmented Generation (RAG)** playground that wires up FastAPI, P
 
 - **Academic Paper RAG**: The system can ingest arXiv papers and make them searchable (currently loaded with papers about transformers in NLP)
 - **Fully Dockerized**: All components run in containers for easy deployment and testing
+- **FAISS Vector Storage**: Efficient similarity search with FAISS vector indices
 - **Local LLM Support**: Uses TinyLlama for inference, keeping all data local
 - **Conversation Memory**: Maintains chat history in PostgreSQL database per user
 - **LINE Bot Integration**: Ready-to-use LINE messaging interface with automated webhook setup
@@ -43,7 +44,7 @@ A **Retrieval‑Augmented Generation (RAG)** playground that wires up FastAPI, P
 │   └── db/                       # 資料庫相關封裝
 │       ├── database.py           # 建立 SQLAlchemy Engine & SessionLocal
 │       ├── memory.py             # ➜ 快取最近對話，用於 RAG Memory
-│       └── models.py             # ORM Models（含 pgvector.Vector）
+│       └── models.py             # ORM Models（User & ChatHistory）
 │
 ├── crawler/                      # 網站爬蟲 & 定時排程
 │   ├── fetcher.py                # 抓指定網址 /S3 /RSS，落地到 data/pdf
@@ -102,7 +103,7 @@ This project currently includes:
 3. **Database Structure**:
    - User storage with LINE user IDs
    - Chat history with timestamps for conversation memory
-   - PostgreSQL with pgvector extension for production-ready vector storage
+   - Conversation persistence for contextual responses
 
 4. **LLM Integration**:
    - TinyLlama local inference
