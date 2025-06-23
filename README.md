@@ -1,12 +1,12 @@
 # 📚 yu-rag-papers
 
-A **Retrieval‑Augmented Generation (RAG)** playground that wires up FastAPI, PostgreSQL + pgvector, an embedding worker, and a LINE Bot into a single reproducible environment.
+A **Retrieval‑Augmented Generation (RAG)** playground that wires up FastAPI, PostgreSQL + pgvector, an embedding worker, and a LINE Bot into a single reproducible environment.
 
 *Built for quick experiments, demos, and personal projects.*
 
 ---
 
-## ✨ What’s inside?
+## ✨ What's inside?
 
 | Layer        | Tech (主要套件 / 映像)                                          | Purpose / Role                                                          |
 | -------------| -------------------------------------------------------------- | ----------------------------------------------------------------------- |
@@ -17,13 +17,22 @@ A **Retrieval‑Augmented Generation (RAG)** playground that wires up FastAPI, 
 | **Bot**      | LINE Messaging API (SDK)                                       | Chat interface for end users; forwards queries to API                   |
 | **Tunnel**   | ngrok                                                          | Expose local API to LINE for webhook callbacks during dev               |
 
-> 🐳 **Everything is containerised** – simply run `docker compose up` and you’ll have the database, embedding worker, local LLM and API + LINE webhook all wired together.
-
-
+> 🐳 **Everything is containerised** – simply run `docker compose up` and you'll have the database, embedding worker, local LLM and API + LINE webhook all wired together.
 
 ---
 
-## 🗂 Project layout
+## 🔍 Key Features
+
+- **Academic Paper RAG**: The system can ingest arXiv papers and make them searchable (currently loaded with papers about transformers in NLP)
+- **Fully Dockerized**: All components run in containers for easy deployment and testing
+- **Local LLM Support**: Uses TinyLlama for inference, keeping all data local
+- **Conversation Memory**: Maintains chat history in PostgreSQL database per user
+- **LINE Bot Integration**: Ready-to-use LINE messaging interface with automated webhook setup
+- **Production-Ready Architecture**: Follows best practices with multi-stage Docker builds and component isolation
+
+---
+
+## 🗂 Project layout
 
 ```text
 ├── app/                          # FastAPI 服務 ─ Web Layer
@@ -51,7 +60,7 @@ A **Retrieval‑Augmented Generation (RAG)** playground that wires up FastAPI, 
 │   └── pdf_text/                 # 解析後的純文字（chunk 前）
 │
 ├── models/                       # 本地 LLM / Embedding（gguf、bin）
-│   └── tinyllama-1.1b-gguf/      # 示例；實際路徑依自行掛載
+│   └── tinyllama-q4_K_M.gguf     # 示例；實際路徑依自行掛載
 │
 ├── requirements/                 # 依賴拆分，減少重建時間
 │   ├── requirements.core.txt     # langchain, pydantic, tqdm...
@@ -64,19 +73,51 @@ A **Retrieval‑Augmented Generation (RAG)** playground that wires up FastAPI, 
 │
 ├── bin/                          # 容器內啟動腳本 / 本機輔助指令
 │   ├── start_api.sh              # 設定 uvicorn workers、expose 8000
-│   └── start_embed.sh            # 一鍵跑 crawler ➜ embed ➜ 更新向量庫
+│   ├── ingest.sh                 # 快速導入並處理一篇論文
+│   └── dev_start_api.sh          # 用於本地開發的API啟動指令
 │
 ├── .env.example                  # 範例環境變數，cp 為 .env
 ├── docker-compose.yml            # db + embed + api 三容器協調
 └── README.md                     # 專案文件（安裝、執行、FAQ）
-
 ```
 
 ---
 
-## 🚀 Quick start (Docker Compose)
+## 📋 Current Implementation
 
-> **Prerequisites**  Docker Desktop 24+ or Docker Engine 20.10+.
+This project currently includes:
+
+1. **Academic Paper RAG**: Four NLP papers from arXiv have been ingested:
+   - 2004.11886v1.pdf
+   - 2007.06257v2.pdf
+   - 2106.02242v2.pdf
+   - 2305.08800v1.pdf
+
+2. **Embedding Pipeline**:
+   - PDF fetching from arXiv via `crawler/fetcher.py`
+   - Text extraction and paragraph segmentation
+   - Vector generation using `sentence-transformers/all-MiniLM-L6-v2`
+   - FAISS index storage for efficient retrieval
+
+3. **Database Structure**:
+   - User storage with LINE user IDs
+   - Chat history with timestamps for conversation memory
+   - PostgreSQL with pgvector extension for production-ready vector storage
+
+4. **LLM Integration**:
+   - TinyLlama local inference
+   - Support for PEFT/LoRA fine-tuning
+
+5. **LINE Bot**:
+   - Automatic webhook setup using ngrok
+   - Message validation and processing
+   - Response formatting for LINE's character limits
+
+---
+
+## 🚀 Quick start (Docker Compose)
+
+> **Prerequisites**  Docker Desktop 24+ or Docker Engine 20.10+.
 
 1. **Clone & configure**
 
@@ -102,7 +143,7 @@ A **Retrieval‑Augmented Generation (RAG)** playground that wires up FastAPI, 
    ‑ Swagger → [http://localhost:8000/docs](http://localhost:8000/docs)
    ‑ Postgres → localhost:5432 (`rag_user` / `rag_pass`)
 
-   The API container will print the autogenerated **Webhook URL** (ngrok) to register in the LINE console, e.g.
+   The API container will print the autogenerated **Webhook URL** (ngrok) to register in the LINE console, e.g.
 
    ```text
    🔗  Webhook URL: https://xxxxx.ngrok-free.app/webhook/line
@@ -117,7 +158,7 @@ A **Retrieval‑Augmented Generation (RAG)** playground that wires up FastAPI, 
 
 ---
 
-## 🧪 Running locally without Docker
+## 🧪 Running locally without Docker
 
 1. **Start Postgres** (native, Homebrew, or a tiny container):
 
@@ -143,3 +184,51 @@ A **Retrieval‑Augmented Generation (RAG)** playground that wires up FastAPI, 
    (Optional) run `ngrok http 8000` to expose the webhook.
 
 ---
+
+## 🔧 Adding New Papers
+
+To add new academic papers to the system:
+
+```bash
+# Quick import using bin/ingest.sh
+source bin/ingest.sh
+
+# Or manually run the crawler with custom parameters
+python -m crawler.fetcher --query "cat:cs.CL AND transformers" --max 5
+```
+
+After adding papers, you need to generate embeddings:
+
+```bash
+# Generate embeddings for all PDFs in the data/pdf directory
+python -m rag.embeddings
+```
+
+---
+
+## 📱 Testing the LINE Bot
+
+After starting the system and seeing the webhook URL:
+
+1. Go to the [LINE Developers Console](https://developers.line.biz/console/)
+2. Navigate to your bot's settings
+3. Update the webhook URL to match the one provided by the system
+4. Enable webhook in the settings
+5. Send a message to your bot and it should respond using RAG from your academic papers
+
+---
+
+## 🧩 Extending the System
+
+This framework is designed to be modular. You can:
+
+1. Replace the LLM by changing the model in `rag/rag_chain.py`
+2. Add new document sources by implementing custom crawlers
+3. Implement additional chat interfaces beyond LINE
+4. Fine-tune the LLM using the provided scripts in `fine_tune/`
+
+---
+
+## 📄 License
+
+See the [LICENSE](LICENSE) file for details.
