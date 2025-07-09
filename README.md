@@ -84,6 +84,50 @@ A **Retrieval‑Augmented Generation (RAG)** playground that wires up FastAPI, P
 
 ---
 
+
+## 📥 Downloading LLM Models
+
+> **Note:** You need to manually download the LLM model file (e.g., TinyLlama GGUF) before running the system. Please ensure you comply with the model's license and verify the file integrity after download.
+
+
+### Option 1: Download manually
+
+1. Go to the official model repository, e.g. [TinyLlama on Hugging Face](https://huggingface.co/TinyLlama/TinyLlama-1.1B-Chat-v1.0-GGUF).
+2. Download the desired `.gguf` file (e.g., `TinyLlama-1.1B-Chat-v1.0-q4_K_M.gguf`).
+3. Place the file in the `models/` directory of this project:
+
+   ```bash
+   mv /path/to/TinyLlama-1.1B-Chat-v1.0-q4_K_M.gguf models/
+   ```
+4. Double-check the file size and hash to ensure the download is complete and uncorrupted.
+5. Update the model path in configuration if you use a different filename.
+
+### Option 2: Download with Python (recommended for reproducibility)
+
+You can use the `huggingface_hub` package to download the model directly:
+
+```bash
+pip install huggingface_hub
+```
+
+Example Python script:
+
+```python
+from huggingface_hub import hf_hub_download
+
+# Download TinyLlama GGUF to ./models/
+hf_hub_download(
+    repo_id="TinyLlama/TinyLlama-1.1B-Chat-v1.0-GGUF",
+    filename="TinyLlama-1.1B-Chat-v1.0-q4_K_M.gguf",
+    local_dir="models",
+    local_dir_use_symlinks=False
+)
+```
+
+
+Please make sure you have accepted the model's license on Hugging Face before downloading.
+
+---
 ## 📋 Current Implementation
 
 This project currently includes:
